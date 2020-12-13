@@ -1,7 +1,11 @@
 import pygame
 import math
+import rospy
+import roslib
+import time
 import numpy as np
 from Queue import PriorityQueue
+from nav_msgs.msg import OccupancyGrid
 
 #Pygame window dimension setup
 BASE_WIDTH = 600 #Base Window witdh (pixels)
@@ -208,7 +212,7 @@ def get_clicked_pos(pos, rows, heigth):
 
     return row, col
 
-def main(win, width, heigth, my_rows, my_cols):
+def astar(win, width, heigth, my_rows, my_cols):
     #Grid dimensions
     ROWS = my_rows
     COLS = my_cols
@@ -260,21 +264,32 @@ def main(win, width, heigth, my_rows, my_cols):
                         for spot in row:
                             spot.update_neighbors(grid)
                     path = algorithm(lambda: draw(win, grid, ROWS, COLS, width), grid, start, end)
-                    print("Initial point")
-                    print(start.get_pos())
-                    print("Final Point")
-                    print(end.get_pos())
-                    print("Path")
-                    print(path)
-                    
-                
+                          
                 if event.key == pygame.K_c:
                     start = None
                     end = None 
                     grid = make_grid(ROWS, COLS, width)
 
     pygame.quit()
+    print("Initial point")
+    print(start.get_pos())
+    print("Final Point")
+    print(end.get_pos())
+    print("Path")
+    print(path)
+    return path
 
-    
+def callback(data):
+    rospy.loginfo("Map recieved")
+    cost_map.data = data.data
 
-main(WIN, WIDTH, HEIGHT, ROWS, COLS)
+if __name__ == "__main__":
+
+    #Node initialization
+    rospy.init_node("A*_path", anonymous = False)
+    rate = rospy.Rate(20) # 50 Hz ROS
+    cost_map = OccupancyGrid()
+
+    rospy.Subscriber("map_listener", OccupancyGrid , callback)
+
+    path = astar(WIN, WIDTH, HEIGHT, ROWS, COLS)
