@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <launch>
     <!-- Robot pose -->
-    <arg name="x" default="0" />
+    <arg name="x" default="-0.5" />
     <arg name="y" default="0" />
     <arg name="z" default="-1.5" />
     <arg name="yaw" default="0" />
     <arg name="world" default="true" />
-    <arg name="map_file" default="$(find rycsv_kobuki_localization)/config/map_karto.yaml"/>
+    <arg name="map_file" default="$(find rycsv_kobuki_localization)/config/mapa020.yaml"/>
 
     <!-- Control Node -->
     <!-- <node name="motion_controller" pkg="rycsv_kobuki_localization" type="motion_control.py" output="screen">
@@ -32,7 +32,7 @@
     <node pkg="nodelet" type="nodelet" name="$(arg robot_name)_nodelet_manager" args="manager" />
 
     <!-- RVIZ Visualization -->
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rycsv_kobuki_localization)/config/config.rviz" />
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rycsv_kobuki_localization)/config/config2.rviz" />
 
     <!-- RQT Reconfigure Node -->
     <node name="reconfigure_gui" pkg="rqt_reconfigure" type="rqt_reconfigure" />
@@ -42,6 +42,13 @@
 
     <!-- AMCL -->
     <include file="$(find rycsv_kobuki_localization)/launch/amcl.launch"/>
+
+    <!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen" >
+        <remap from="scan" to="scan" />
+        <remap from="base_link" to="base_link" />
+        <remap from="odom" to="odom" />
+        <rosparam command="load" file="$(find rycsv_kobuki_localization)/config/karto_mapper_params.yaml"/>
+    </node> -->
 
     <!-- move_base -->
     <include file="$(find rycsv_kobuki_localization)/launch/move_base.launch" />
