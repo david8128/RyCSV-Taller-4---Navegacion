@@ -1,46 +1,50 @@
 <?xml version="1.0"?>
 <launch>
     <!-- Robot pose -->
-    <arg name="x" default="0"/>
-    <arg name="y" default="0"/>
-    <arg name="z" default="-1.5"/>
-    <arg name="yaw" default="0"/>
-    <arg name="world" default="true"/>
+    <arg name="x" default="0" />
+    <arg name="y" default="0" />
+    <arg name="z" default="-1.5" />
+    <arg name="yaw" default="0" />
+    <arg name="world" default="true" />
+    <arg name="map_file" default="$(find rycsv_kobuki_localization)/config/map_karto.yaml"/>
 
     <!-- Control Node -->
-    <node name="motion_controller" pkg="rycsv_kobuki_motion_control" type="motion_control.py" output="screen">
-        <rosparam command="load" file="$(find rycsv_kobuki_motion_control)/config/control_params.yaml"/>
-    </node>
+    <!-- <node name="motion_controller" pkg="rycsv_kobuki_localization" type="motion_control.py" output="screen">
+        <rosparam command="load" file="$(find rycsv_kobuki_localization)/config/control_params.yaml" />
+    </node> -->
 
     <!-- Gazebo Initialization -->
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
-        <arg name="use_sim_time" value="true"/>
-        <arg name="debug" value="false"/>
-        <arg if="$(arg world)" name="world_name" value="$(find rycsv_kobuki_motion_control)/worlds/taller2.world"/>  
-        </include>
+        <arg name="use_sim_time" value="true" />
+        <arg name="debug" value="false" />
+        <arg if="$(arg world)" name="world_name" value="$(find rycsv_kobuki_localization)/worlds/taller2.world" />
+    </include>
 
     <!-- Spawns Kobuki inside a Gazebo simulation -->
-    <arg name="robot_name" value="mobile_base"/>
-    <param name="robot_description"
-        command="$(find xacro)/xacro '$(find kobuki_description)/urdf/kobuki_standalone.urdf.xacro'"/>
-    <node pkg="gazebo_ros" 
-          type="spawn_model" 
-          name="spawn_$(arg robot_name)"
-          args="-x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg yaw)
-          -unpause -urdf -param robot_description -model $(arg robot_name)" 
-          respawn="false">
-    </node>
+    <arg name="robot_name" value="mobile_base" />
+    <param name="robot_description" command="$(find xacro)/xacro '$(find kobuki_description)/urdf/kobuki_standalone.urdf.xacro'" />
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_$(arg robot_name)" args="-x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg yaw)
+          -unpause -urdf -param robot_description -model $(arg robot_name)" respawn="false"></node>
 
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
-        <param name="publish_frequency" type="double" value="30.0"/>
+        <param name="publish_frequency" type="double" value="30.0" />
     </node>
-    <node pkg="nodelet" type="nodelet" name="$(arg robot_name)_nodelet_manager" args="manager"/>
+    <node pkg="nodelet" type="nodelet" name="$(arg robot_name)_nodelet_manager" args="manager" />
 
-    <!-- RVIZ Visualization --> 
-    <node name="rviz" pkg="rviz" type="rviz" 
-          args="-d $(find rycsv_kobuki_motion_control)/config/config.rviz"/> 
+    <!-- RVIZ Visualization -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rycsv_kobuki_localization)/config/config.rviz" />
 
-    <!-- RGT Reconfigure Node -->
+    <!-- RQT Reconfigure Node -->
     <node name="reconfigure_gui" pkg="rqt_reconfigure" type="rqt_reconfigure" />
+
+    <!-- Map server -->
+    <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+
+    <!-- AMCL -->
+    <include file="$(find rycsv_kobuki_localization)/launch/amcl.launch"/>
+
+    <!-- move_base -->
+    <include file="$(find rycsv_kobuki_localization)/launch/move_base.launch" />
+
 
 </launch>

@@ -12,7 +12,7 @@ from control import Motion
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Twist
 from dynamic_reconfigure.server import Server
-from rycsv_kobuki_motion_control.cfg import controllerConfig
+from rycsv_kobuki_localization.cfg import controllerConfig
 
 def angle_between(p0,p1,p2):
     v0 = np.array(p1) - np.array(p0)
