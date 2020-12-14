@@ -319,7 +319,7 @@ if __name__ == "__main__":
 
     #Node initialization
     rospy.init_node("A*_path", anonymous = False)
-    rate = rospy.Rate(50) # 50 Hz ROS
+    rate = rospy.Rate(100) # 50 Hz ROS
 
     #Map message
     cost_map = OccupancyGrid()
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     real_width = map_resolution * map_width #Widht in meters
     real_height = map_resolution * map_height #Widht in meters
 
-    origin = np.array([-0.4,0])
+    origin = np.array([-0.6,0])
     origin_discrete = (origin -[map_origin[0],-(map_height*map_resolution)-map_origin[1]])//map_resolution #Respecto origen mapa
     print("Origen en matriz :" + str(origin_discrete))
 
