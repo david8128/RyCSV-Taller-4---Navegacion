@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import pygame
 import math
 import rospy
@@ -5,21 +7,12 @@ import roslib
 import time
 import numpy as np
 from Queue import PriorityQueue
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import *
+from std_msgs.msg import *
+
 
 #Pygame window dimension setup
-BASE_WIDTH = 600 #Base Window witdh (pixels)
-#Grid Dims
-ROWS = 40  
-COLS = 40
-#Adjust for non square grids
-FIXED_SIZE = (BASE_WIDTH // COLS)
-HEIGHT =  FIXED_SIZE  * ROWS
-WIDTH = FIXED_SIZE * COLS
-
-#Create game window
-WIN = pygame.display.set_mode((WIDTH,HEIGHT))
-pygame.display.set_caption("A* Path Finding Algorithm")
+BASE_WIDTH = 1000 #Base Window witdh (pixels)
 
 #Window colors
 RED = (255, 0, 0)
@@ -121,7 +114,7 @@ def reconstruct_path(came_from, current, draw):
         current = came_from[current]
         current.make_path()
         path = np.append([current.get_pos()], path, 0)
-        draw()
+    draw()
     return path
 
 #A* Algorithm
@@ -149,6 +142,7 @@ def algorithm(draw, grid, start, end):
             path = reconstruct_path(came_from, end, draw)
             end.make_end()
             start.make_start()
+            draw()
             return path
 
         for neighbor in current.neighbors:
@@ -164,7 +158,7 @@ def algorithm(draw, grid, start, end):
                     open_set_hash.add(neighbor)
                     neighbor.make_open()
         
-        draw()
+        
 
         if current != start:
             current.make_closed()
@@ -212,51 +206,36 @@ def get_clicked_pos(pos, rows, heigth):
 
     return row, col
 
-def astar(win, width, heigth, my_rows, my_cols):
+def astar(win, width, heigth, my_rows, my_cols, matrix, start_point, end_point):
     #Grid dimensions
     ROWS = my_rows
     COLS = my_cols
     grid = make_grid(ROWS, COLS, width) #Generate grid
     
+    for row in range(ROWS):
+        for col in range(COLS):
+            #print("row: " + str(row))
+            #print("col: " + str(col))
+            val = matrix[row][col]
+            #print("val: " + str(val))
+            if val > 50:
+                grid[col][row].make_barrier()
+
+
     #Limit points initialization
-    start = None
-    end = None 
-    
+    start = grid[start_point[0]][start_point[1]] 
+    start.make_start()
+    end = grid[end_point[0]][end_point[1]] 
+    end.make_end()
+
+
     #Flag States
     run = True
 
     #Game loop
     while run:
         draw(win, grid, ROWS, COLS, width)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT: #Check if Quit "X" has benn pressed
-                run = False
-                
-            if pygame.mouse.get_pressed()[0]: #Check for mouse left click
-                pos = pygame.mouse.get_pos()
-                row, col = get_clicked_pos(pos, ROWS, heigth)
-                spot = grid[row][col]
-
-                if not start and spot != end:
-                    start = spot
-                    start.make_start()
-
-                elif not end and spot != start:
-                    end = spot
-                    end.make_end()
-                
-                elif spot != end and spot != start:
-                    spot.make_barrier()
-
-            elif pygame.mouse.get_pressed()[2]: #Check for mouse right click
-                pos = pygame.mouse.get_pos()
-                row, col = get_clicked_pos(pos, ROWS, heigth)
-                spot = grid[row][col]
-                spot.reset()
-                if spot == start:
-                    start = None 
-                if spot == end:
-                    end = None 
+        for event in pygame.event.get():    
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and start and end:
@@ -264,32 +243,143 @@ def astar(win, width, heigth, my_rows, my_cols):
                         for spot in row:
                             spot.update_neighbors(grid)
                     path = algorithm(lambda: draw(win, grid, ROWS, COLS, width), grid, start, end)
-                          
-                if event.key == pygame.K_c:
-                    start = None
-                    end = None 
-                    grid = make_grid(ROWS, COLS, width)
+                    run = False
 
-    pygame.quit()
     print("Initial point")
     print(start.get_pos())
     print("Final Point")
     print(end.get_pos())
-    print("Path")
-    print(path)
     return path
 
+#Recieve map data from map server topic
 def callback(data):
     rospy.loginfo("Map recieved")
     cost_map.data = data.data
+    cost_map.info = data.info
+    cost_map.header = data.header
+
+def angle_between(p0,p1,p2):
+    v0 = np.array(p1) - np.array(p0)
+    v1 = np.array(p2) - np.array(p0)
+
+    angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
+    return angle
+
+def xy2traj(dots):
+    """
+    From xy coordinates generates a complete trajectory
+    Takes x,y coordinates of a trajectory and calculates x,y,theta coordinates
+    with intermidiate points that assure twists of 90
+    
+    Parameters
+    ----------
+    dots : list of [x,y]
+        Dots [[x_0,y_0],[x_1,y_1],...]
+    Motion : control.Motion
+        Class where the control and motion is settled
+    Returns
+    -------
+    list of [x,y,theta]
+        Complete trajectory
+    """
+    traj = []
+    last_dot = 0 
+    last_x = 0
+    last_y = 0
+    for count, dot in enumerate(dots):
+        x = dot[0]
+        y = dot[1]
+        if (count == 0) :
+            theta = 90
+            traj.append([x,y,theta])           #Radians to deg
+        else:
+            theta = angle_between(last_dot,[last_x+1,last_y],dot)
+            traj.append([last_x,last_y,np.rad2deg(theta)])
+            traj.append([x,y,np.rad2deg(theta)])
+        last_dot = dot
+        last_theta = theta
+        last_x = x
+        last_y = y
+    return traj
+
 
 if __name__ == "__main__":
 
     #Node initialization
     rospy.init_node("A*_path", anonymous = False)
     rate = rospy.Rate(20) # 50 Hz ROS
+
+    #Map message
     cost_map = OccupancyGrid()
 
-    rospy.Subscriber("map_listener", OccupancyGrid , callback)
+    #Map suscriber
+    rospy.Subscriber("move_base/global_costmap/costmap", OccupancyGrid , callback)
 
-    path = astar(WIN, WIDTH, HEIGHT, ROWS, COLS)
+    #Make a pause before recieving map
+    print("Retrieving Map")
+    time.sleep(1)
+    print("Map Data: ")
+    print(cost_map.data)
+    print("Map Info: ")
+    print(cost_map.info)
+
+    #Map dimmensions
+    map_width = cost_map.info.width
+    map_height = cost_map.info.height
+    map_origin = np.array([cost_map.info.origin.position.x,cost_map.info.origin.position.y])
+
+
+    #Convert map from vector to matrix
+    map_vect = cost_map.data
+    map_grid = np.reshape(map_vect, (map_height, map_width))
+    map_grid = map_grid[::-1,:]
+    print("Converted Map:")
+    print(map_grid)
+    print("Converted map shape: " + str(map_grid.shape))
+
+    #GRAPHICAL PARAMS
+    #Grid Dims
+    ROWS = map_height  
+    COLS = map_width
+    #Adjust for non square grids
+    FIXED_SIZE = (BASE_WIDTH // COLS)
+    HEIGHT =  FIXED_SIZE  * ROWS
+    WIDTH = FIXED_SIZE * COLS
+
+    #Create game window
+    WIN = pygame.display.set_mode((WIDTH,HEIGHT))
+    pygame.display.set_caption("A* Path Finding Algorithm")
+
+    #PHYSICAL PARAMS
+    map_resolution = cost_map.info.resolution
+    real_width = map_resolution * map_width #Widht in meters
+    real_height = map_resolution * map_height #Widht in meters
+
+    origin = np.array([0,0])
+    origin_discrete = (origin -[map_origin[0],-(map_height*map_resolution)-map_origin[1]])//map_resolution #Respecto origen mapa
+    print("Origen en matriz :" + str(origin_discrete))
+
+    goal = np.array([-1,3.5])
+    goal_discrete = (goal -[map_origin[0],-(map_height*map_resolution)-map_origin[1]])//map_resolution #Respecto origen mapa
+    print("Origen en matriz :" + str(origin_discrete))
+
+    path = astar(WIN, WIDTH, HEIGHT, ROWS, COLS, map_grid, np.uint8(origin_discrete), np.uint8(goal_discrete))
+    print("Path")
+    print(path)
+
+    path[:,1]=-path[:,1]
+    path_mundo = np.array(path)*map_resolution+np.array([map_origin[0],map_height*map_resolution+map_origin[1]])
+    print("Path Mundo")
+    print(path_mundo)
+
+    temp = xy2traj(path_mundo)
+    trajectory = np.array(temp)
+    print("Path Mundo + Orientacion")
+    print(trajectory)
+
+    while(not rospy.is_shutdown()):
+        rate.sleep() #Wait for ROS node cycle
+
+    pygame.quit()
+
+    
