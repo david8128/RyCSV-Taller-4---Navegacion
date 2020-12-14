@@ -1,4 +1,4 @@
-k_p: 0.7
+k_p: 0.4
 k_a: 6.0
 k_b: -7.0
 
@@ -10,3 +10,4 @@ init_pos:
 cruise: 
   lin: 0.3
   ang: 60
+
