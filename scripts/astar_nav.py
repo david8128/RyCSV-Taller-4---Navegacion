@@ -6,9 +6,13 @@ import rospy
 import roslib
 import time
 import numpy as np
+from controlador import controller
+from dynamic_reconfigure.server import Server
+from rycsv_kobuki_localization.cfg import controllerConfig
 from Queue import PriorityQueue
 from nav_msgs.msg import *
 from std_msgs.msg import *
+from geometry_msgs.msg import *
 
 
 #Pygame window dimension setup
@@ -286,11 +290,13 @@ def xy2traj(dots):
     last_dot = 0 
     last_x = 0
     last_y = 0
+    traj.append([0,0,80])           #Radians to deg
+    traj.append([0,0,140])
     for count, dot in enumerate(dots):
         x = dot[0]
         y = dot[1]
         if (count == 0) :
-            theta = 90
+            theta = 180
             traj.append([x,y,theta])           #Radians to deg
         else:
             theta = angle_between(last_dot,[last_x+1,last_y],dot)
@@ -302,18 +308,38 @@ def xy2traj(dots):
         last_y = y
     return traj
 
+#Callback function from dynamic reconfigure
+def srv_callback(config, level):
+    global dyn_flag
+    dyn_flag = 1
+    print('Param change requested...')
+    return config
 
 if __name__ == "__main__":
 
     #Node initialization
     rospy.init_node("A*_path", anonymous = False)
-    rate = rospy.Rate(20) # 50 Hz ROS
+    rate = rospy.Rate(50) # 50 Hz ROS
 
     #Map message
     cost_map = OccupancyGrid()
 
     #Map suscriber
     rospy.Subscriber("move_base/global_costmap/costmap", OccupancyGrid , callback)
+
+    #Controller init
+    kobuki_controller = controller()
+
+    #Dynamic reconfigure flag
+    dyn_flag = 0
+
+    #Dynamic reconfigure server initialization
+    srv = Server(controllerConfig, srv_callback)
+
+    #Wheel speed publisher
+    nameSpeedTopic = "/mobile_base/commands/velocity"
+    kobuki_speed_pub = rospy.Publisher(nameSpeedTopic, Twist, queue_size=10)
+    command = Twist()
 
     #Make a pause before recieving map
     print("Retrieving Map")
@@ -355,7 +381,7 @@ if __name__ == "__main__":
     real_width = map_resolution * map_width #Widht in meters
     real_height = map_resolution * map_height #Widht in meters
 
-    origin = np.array([0,0])
+    origin = np.array([-0.4,0])
     origin_discrete = (origin -[map_origin[0],-(map_height*map_resolution)-map_origin[1]])//map_resolution #Respecto origen mapa
     print("Origen en matriz :" + str(origin_discrete))
 
@@ -373,11 +399,67 @@ if __name__ == "__main__":
     print(path_mundo)
 
     temp = xy2traj(path_mundo)
-    trajectory = np.array(temp)
+    traj = np.array(temp)
     print("Path Mundo + Orientacion")
-    print(trajectory)
+    print(traj)
 
-    while(not rospy.is_shutdown()):
+    #Trajectory limits
+    goal_id = 0
+    dot_count, coord = traj.shape
+
+    #Initial point
+    kobuki_controller.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+    print("--")
+    print("GOAL")
+    print("X: "+str(kobuki_controller.x_goal))
+    print("Y: "+str(kobuki_controller.y_goal))
+    print("Z: "+str(kobuki_controller.th_goal))
+    print("--")
+
+    moving = True
+    while(not rospy.is_shutdown() and moving):
+
+         #Check and change controllers params if requested 
+        if dyn_flag == 1:
+            kobuki_controller.set_controller_params()
+            dyn_flag = 0
+
+        #Get "now" time to syncronize target tf and error tf 
+        now = rospy.Time.now()
+
+        #Broadcast goal TF
+        kobuki_controller.broadcast_goal(now)
+
+        #Control methods
+        kobuki_controller.compute_error(now)
+        kobuki_controller.transform_error()
+        kobuki_controller.control_speed()
+
+        #Publish Speed
+        command.linear.x =  kobuki_controller.v_out
+        command.angular.z =  kobuki_controller.w_out
+        kobuki_speed_pub.publish(command)
+
+        #Check if goal has been reached
+        kobuki_controller.check_goal_reached()
+        if kobuki_controller.done:  
+            print("Goal has been reached...")
+            print("--")
+            goal_id = goal_id+1      #Change point when arrived to goal
+
+            if goal_id == dot_count:
+                moving = False
+
+            kobuki_controller.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+            now = rospy.Time.now()
+            kobuki_controller.broadcast_goal(now) 
+            kobuki_controller.compute_error(now)
+
+        #Check and change controllers params if requested 
+        if dyn_flag == 1:
+            kobuki_controller.set_controller_params()
+            dyn_flag = 0
+        
         rate.sleep() #Wait for ROS node cycle
 
     pygame.quit()
