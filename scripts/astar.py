@@ -6,7 +6,7 @@ from Queue import PriorityQueue
 #Pygame window dimension setup
 BASE_WIDTH = 600 #Base Window witdh (pixels)
 #Grid Dims
-ROWS = 100   
+ROWS = 40  
 COLS = 40
 #Adjust for non square grids
 FIXED_SIZE = (BASE_WIDTH // COLS)

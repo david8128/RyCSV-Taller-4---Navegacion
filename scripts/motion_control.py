@@ -114,9 +114,6 @@ if __name__ == "__main__":
             kobuki_controller.set_controller_params()
             dyn_flag = 0
 
-
-
-
         #Get "now" time to syncronize target tf and error tf 
         now = rospy.Time.now()
 

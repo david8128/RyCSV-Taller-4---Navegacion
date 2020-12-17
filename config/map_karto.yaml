@@ -1,5 +1,5 @@
 image: ./map_karto.pgm
-resolution: 0.050000
+resolution: 0.05
 origin: [-7.452459, -9.214876, 0.000000]
 negate: 0
 occupied_thresh: 0.65
